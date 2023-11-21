@@ -172,7 +172,8 @@ extension OpenAI.Model {
             let _8k = 8192
             let _16k = 16384
             let _32k = 16384
-            let _128k = 131072
+            
+            // let _128k = 131072
 
             switch self {
                 case .gpt_3_5_turbo:
