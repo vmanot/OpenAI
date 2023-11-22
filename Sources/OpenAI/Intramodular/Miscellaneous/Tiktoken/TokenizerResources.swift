@@ -6,13 +6,22 @@ import CryptoKit
 import Foundation
 import Swallow
 
-enum Load {
-    static func loadTiktokenBpe(url: String, decoder: VocabFileDecoder = VocabFileDecoder()) async -> [[UInt8]: Int] {
-        guard let data = try? await Load.fetch(stringUrl: url) else { return [:] }
+enum TokenizerResources {
+    static func loadTiktokenBPE(
+        url: String,
+        decoder: _VocabularyFileDecoder = _VocabularyFileDecoder()
+    ) async throws -> [[UInt8]: Int] {
+        guard let data = try await TokenizerResources.fetch(stringUrl: url) else {
+            return [:]
+        }
+        
         return decoder.decode(data)
     }
     
-    static func dataGymToMergeableBpeRanks(vocabBpeFile: String, encoderJsonFile: String? = nil) async -> [[UInt8]: Int] {
+    static func dataGymToMergeableBPERanks(
+        vocabularyBPEFile: String,
+        encoderJsonFile: String? = nil
+    ) async -> [[UInt8]: Int] {
         var rankToIntByte = (0..<exponentialPow).filter({ Character($0).isPrintable && !Character($0).isWhitespace })
         var dataGymByteToByte: [Character: Int] = toDictionary(array: rankToIntByte)
         
@@ -26,7 +35,7 @@ enum Load {
                 }
             })
         
-        let bpeMerges: [(String, String)] = await getVocab(url: vocabBpeFile)
+        let bpeMerges: [(String, String)] = await getVocab(url: vocabularyBPEFile)
         var bpeRanks: [[UInt8]: Int] = .init()
         rankToIntByte.enumerated().forEach({
             let key = Array(Character($0.element).utf16).map({ UInt8($0) })
@@ -42,28 +51,11 @@ enum Load {
             n += 1
         })
         
-        // TODO: Validate bpe ranks with json encoder file
-        //        assert(bpeRanks.count == 50256, "Must be expected encoder count")
-        //        if let validationUrl = encoderJsonFile {
-        //            let validationEncoder = await getDecoder(url: validationUrl)
-        //            assert(bpeRanks.count == 50256, "Must be expected encoder count")
-        //            assert(bpeRanks.count == validationEncoder.count -1, "Must be expected encoder count")
-        //            assert(bpeRanks == validationEncoder, "Must be expected same encoder")
-        //        }
-        
         return bpeRanks
     }
 }
 
-private extension String {
-    var sha256: String {
-        let data = Data(self.utf8)
-        let hashed = SHA256.hash(data: data)
-        return hashed.compactMap { String(format: "%02x", $0) }.joined()
-    }
-}
-
-private extension Load {
+private extension TokenizerResources {
     
     private static let cacheDirectoryURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
     
@@ -81,7 +73,7 @@ private extension Load {
     
     // Fetch data
     static func fetch(stringUrl: String) async throws -> Data? {
-        let urlHash = stringUrl.sha256
+        let urlHash = stringUrl._SHA256
         
         // Create a URL for cache file
         let cacheFileURL = cacheDirectoryURL.appendingPathComponent("\(urlHash)")
@@ -142,23 +134,29 @@ private extension Load {
 // MARK: - Auxiliary
 
 extension String {
+    var _SHA256: String {
+        let data = Data(self.utf8)
+        let hashed = SHA256.hash(data: data)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
     func splitOnWhitespace() -> [String] {
         split(separator: " ").map({ String($0) })
     }
 }
 
-fileprivate extension Character {
-    init(_ i: Int) {
-        self.self = Character(UnicodeScalar(i)!)
-    }
-    
-    var isPrintable: Bool {
+extension Character {
+    fileprivate var isPrintable: Bool {
         unicodeScalars.contains(where: { $0.isPrintable })
+    }
+
+    fileprivate init(_ i: Int) {
+        self.self = Character(UnicodeScalar(i)!)
     }
 }
 
-fileprivate extension Unicode.Scalar {
-    var isPrintable: Bool {
+extension Unicode.Scalar {
+    fileprivate var isPrintable: Bool {
         switch properties.generalCategory {
             case .control, .format:
                 return false
@@ -167,4 +165,3 @@ fileprivate extension Unicode.Scalar {
         }
     }
 }
-

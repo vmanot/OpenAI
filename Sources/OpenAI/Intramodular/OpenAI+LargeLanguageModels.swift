@@ -4,7 +4,7 @@
 
 import CorePersistence
 import Diagnostics
-import LargeLanguageModels
+@_spi(Internal) import LargeLanguageModels
 import Merge
 import Swallow
 
@@ -20,7 +20,7 @@ extension OpenAI.APIClient: DependenciesExporting {
 }
 
 extension OpenAI.APIClient: LargeLanguageModelServices {
-    public var _availableLLMs: [_MLModelIdentifier]? {
+    public var _availableLargeLanguageModels: [_MLModelIdentifier]? {
         nil
     }
     
@@ -106,7 +106,7 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         let model: OpenAI.Model
         
         let containsImage = prompt.messages.contains(where: { $0.content._containsImages })
-
+        
         if containsImage {
             model = .chat(.gpt_4_vision_preview)
         } else if heuristics.wantsMaximumReasoning {
@@ -114,7 +114,7 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         } else {
             model = .chat(.gpt_3_5_turbo)
         }
-                
+        
         if model == .chat(.gpt_3_5_turbo) {
             prompt.messages._forEach(mutating: {
                 if $0.role == .system {
@@ -195,15 +195,21 @@ extension OpenAI.APIClient: TextEmbeddingsProvider {
 // MARK: - Auxiliary
 
 extension _MLModelIdentifier {
-    public init(from model: OpenAI.Model.InstructGPT) {
+    public init(
+        from model: OpenAI.Model.InstructGPT
+    ) {
         self.init(provider: .openAI, name: model.rawValue, revision: nil)
     }
     
-    public init(from model: OpenAI.Model.Chat) {
+    public init(
+        from model: OpenAI.Model.Chat
+    ) {
         self.init(provider: .openAI, name: model.rawValue, revision: nil)
     }
     
-    public init(from model: OpenAI.Model.Embedding) {
+    public init(
+        from model: OpenAI.Model.Embedding
+    ) {
         self.init(provider: .openAI, name: model.rawValue, revision: nil)
     }
 }
@@ -241,150 +247,14 @@ extension OpenAI.APIClient.ChatCompletionParameters {
     }
 }
 
-extension OpenAI.ChatMessage {
-    public init(from message: AbstractLLM.ChatMessage) throws {
-        let role: OpenAI.ChatRole
-        
-        switch message.role {
-            case .system:
-                role = .system
-            case .user:
-                role = .user
-            case .assistant:
-                role = .assistant
-            case .other(.function):
-                role = .function
-        }
-        
-        let _content = try message.content._degenerate()
-        
-        if _content.components.contains(where: { $0.payload.type == .functionCall || $0.payload.type == .functionInvocation }) {
-            switch try _content.components.toCollectionOfOne().value.payload {
-                case .functionCall(let call):
-                    self.init(
-                        role: role,
-                        body: .functionCall(.init(name: call.name, arguments: call.arguments))
-                    )
-                case .functionInvocation(let invocation):
-                    self.init(
-                        role: role,
-                        body: .functionInvocation(.init(name: invocation.name, response: invocation.result.rawValue))
-                    )
-                default:
-                    assertionFailure("Unsupported prompt literal.")
-                    
-                    throw Never.Reason.illegal
-            }
-        } else {
-            var _temp = Self(role: role, body: .content([]))
-            
-            try message.content._encode(to: &_temp)
-            
-            self = _temp
-        }
-    }
-}
- 
-extension OpenAI.ChatMessage: _PromptLiteralEncodingContainer {
-    public mutating func encode(_ component: PromptLiteral._Degenerate.Component) throws {
-        var content: [OpenAI.ChatMessageBody._Content] = []
-        
-        switch self.body {
-            case .text(let _content):
-                content.append(.text(_content))
-            case .content(let _content):
-                content = _content
-            case .functionCall(_):
-                throw Never.Reason.unsupported
-            case .functionInvocation(_):
-                throw Never.Reason.unsupported
-        }
-        
-        switch component.payload {
-            case .string(let string):
-                content.append(.text(string))
-            case .image(let image):
-                switch image {
-                    case .url(let url):
-                        content.append(
-                            .imageURL(
-                                .init(
-                                    url: url,
-                                    detail: .auto // FIXME
-                                )
-                            )
-                        )
-
-                }
-            case .dynamicVariable:
-                throw Never.Reason.unsupported
-            case .functionCall:
-                throw Never.Reason.unsupported
-            case .functionInvocation:
-                throw Never.Reason.unsupported
-        }
-        
-        self = .init(role: role, body: .content(content))
-    }
-}
-
-extension AbstractLLM.ChatMessage {
-    public init(from message: OpenAI.ChatMessage) throws {
-        let role: AbstractLLM.ChatRole
-        
-        switch message.role {
-            case .system:
-                role = .system
-            case .user:
-                role = .user
-            case .assistant:
-                role = .assistant
-            case .function:
-                role = .other(.function)
-        }
-        
-        switch message.body {
-            case .text(let content):
-                self.init(role: role, content: PromptLiteral(content, role: .chat(role)))
-            case .content(let content):
-                self.init(role: role, content: PromptLiteral(content, role: .chat(role)))
-            case .functionCall(let call):
-                self.init(
-                    role: role,
-                    content: try PromptLiteral(functionCall: .init(name: call.name, arguments: call.arguments), role: .chat(role))
-                )
-            case .functionInvocation(let invocation):
-                self.init(
-                    role: role,
-                    content: try .init(
-                        functionInvocation: .init(
-                            name: invocation.name,
-                            result: .init(rawValue: invocation.response)
-                        ),
-                        role: .chat(role)
-                    )
-                )
-        }
-    }
-}
-
 extension OpenAI.ChatFunctionDefinition {
-    public init(from function: AbstractLLM.ChatFunctionDefinition) {
+    public init(
+        from function: AbstractLLM.ChatFunctionDefinition
+    ) {
         self.init(
             name: function.name,
             description: function.context,
             parameters: function.parameters
         )
-    }
-}
-
-extension PromptLiteral {
-    public init(
-        _ content: [OpenAI.ChatMessageBody._Content],
-        role: PromptMatterRole
-    ) {
-        
-        fatalError()
-       // self.init("", role: role)
     }
 }

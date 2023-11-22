@@ -6,7 +6,7 @@ import Foundation
 import Swallow
 
 extension OpenAI.Model {
-    var vocab: BPEVocabulary? {
+    var vocabulary: BPEVocabulary? {
         if let encodingName = Self.MODEL_TO_ENCODING[rawValue],
            let vocab = BPEVocabulary.all.first(where: { $0.name == encodingName }) {
             return vocab
@@ -66,12 +66,17 @@ fileprivate extension OpenAI.Model {
         "gpt3": "gpt3",
     ]
     
-    static func findPrefix(with name: String) -> BPEVocabulary? {
-        guard let key = Self.MODEL_PREFIX_TO_ENCODING.keys.first(where: { name.starts(with: $0) }),
-              let name = Self.MODEL_PREFIX_TO_ENCODING[key] ,
-              let vocab = BPEVocabulary.all.first(where: { $0.name == name }) else {
+    static func findPrefix(
+        with name: String
+    ) -> BPEVocabulary? {
+        guard
+            let key = Self.MODEL_PREFIX_TO_ENCODING.keys.first(where: { name.starts(with: $0) }),
+            let name = Self.MODEL_PREFIX_TO_ENCODING[key] ,
+            let vocab = BPEVocabulary.all.first(where: { $0.name == name })
+        else {
             return nil
         }
+        
         return vocab
     }
 }

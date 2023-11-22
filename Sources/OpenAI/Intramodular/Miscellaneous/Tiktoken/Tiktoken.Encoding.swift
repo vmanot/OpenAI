@@ -39,7 +39,7 @@ extension Tiktoken {
         private let specialTokens: [String: Int]
         private let maxValueToken: Int
         
-        private let coreBpe: CoreBPE
+        private let coreBPE: CoreBPE
         
         init(name: String, regex: NSRegularExpression, mergeableRanks: [[UInt8]: Int], specialTokens: [String: Int], explicitNVocab: Int? = nil) {
             self.name = name
@@ -55,15 +55,15 @@ extension Tiktoken {
             //            assert self.max_token_value == explicit_n_vocab - 1
             
             let decoder = mergeableRanks.inverted
-            self.coreBpe = .init(encoder: mergeableRanks, decoder: decoder, regexTls: [regex])
+            self.coreBPE = .init(encoder: mergeableRanks, decoder: decoder, regexTls: [regex])
         }
         
         public func encode(value: String) -> [Int] {
-            coreBpe.encodeOrdinaryNative(text: value)
+            coreBPE.encodeOrdinaryNative(text: value)
         }
         
         public func decode(value: [Int]) -> String {
-            coreBpe.decodeNative(tokens: value)
+            coreBPE.decodeNative(tokens: value)
         }
     }
 }
