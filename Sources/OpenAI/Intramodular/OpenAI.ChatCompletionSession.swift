@@ -14,10 +14,10 @@ extension OpenAI {
         private let client: APIClient
         private let session: URLSession
         private let sessionDelegate = _URLSessionDataDelegate()
-                
+        
         public init(client: APIClient) {
             self.client = client
-
+            
             session = URLSession(
                 configuration: URLSessionConfiguration.default,
                 delegate: sessionDelegate,

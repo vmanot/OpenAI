@@ -17,7 +17,7 @@ extension OpenAI {
                 self.arguments = arguments
             }
         }
-        
+
         public struct FunctionInvocation: Codable, Hashable, Sendable {
             public let name: String
             public let response: String

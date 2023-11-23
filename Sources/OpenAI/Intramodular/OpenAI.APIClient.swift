@@ -14,15 +14,13 @@ extension OpenAI {
             self.interface = interface
             self.session = session
         }
-    }
-}
-
-extension OpenAI.APIClient {
-    public convenience init(apiKey: String?) {
-        self.init(
-            interface: .init(configuration: .init(apiKey: apiKey)),
-            session: .shared
-        )
+        
+        public convenience init(apiKey: String?) {
+            self.init(
+                interface: .init(configuration: .init(apiKey: apiKey)),
+                session: .shared
+            )
+        }
     }
 }
 
@@ -34,6 +32,101 @@ extension OpenAI.APIClient {
         try await run(\.createEmbeddings, with: .init(model: model, input: input))
     }
 }
+
+extension OpenAI.APIClient {
+    public func createCompletion(
+        model: OpenAI.Model,
+        prompt: String,
+        parameters: OpenAI.APIClient.TextCompletionParameters
+    ) async throws -> OpenAI.TextCompletion {
+        let requestBody = OpenAI.API.RequestBodies.CreateCompletion(
+            prompt: .left(prompt),
+            model: model,
+            parameters: parameters,
+            stream: false
+        )
+        
+        return try await run(\.createCompletions, with: requestBody)
+    }
+    
+    public func createCompletion(
+        model: OpenAI.Model,
+        prompts: [String],
+        parameters: OpenAI.APIClient.TextCompletionParameters
+    ) async throws -> OpenAI.TextCompletion {
+        let requestBody = OpenAI.API.RequestBodies.CreateCompletion(
+            prompt: .right(prompts),
+            model: model,
+            parameters: parameters,
+            stream: false
+        )
+        
+        return try await run(\.createCompletions, with: requestBody)
+    }
+
+    public func createChatCompletion(
+        messages: [OpenAI.ChatMessage],
+        model: OpenAI.Model,
+        parameters: OpenAI.APIClient.ChatCompletionParameters
+    ) async throws -> OpenAI.ChatCompletion {
+        let requestBody = OpenAI.API.RequestBodies.CreateChatCompletion(
+            messages: messages,
+            model: model,
+            parameters: parameters,
+            stream: false
+        )
+        
+        return try await run(\.createChatCompletions, with: requestBody)
+    }
+    
+    public func createChatCompletion(
+        messages: [OpenAI.ChatMessage],
+        model: OpenAI.Model.Chat,
+        parameters: OpenAI.APIClient.ChatCompletionParameters
+    ) async throws -> OpenAI.ChatCompletion {
+        try await createChatCompletion(
+            messages: messages,
+            model: .chat(model),
+            parameters: parameters
+        )
+    }
+
+    public func createTextOrChatCompletion(
+        prompt: String,
+        system: String?,
+        model: OpenAI.Model,
+        temperature: Double?,
+        topProbabilityMass: Double?,
+        maxTokens: Int?
+    ) async throws -> Either<OpenAI.TextCompletion, OpenAI.ChatCompletion> {
+        switch model {
+            case .chat(let model): do {
+                let messages: [OpenAI.ChatMessage] = system.map({ [.system($0), .user(prompt)] }) ?? [.user(prompt)]
+                
+                let result = try await createChatCompletion(
+                    messages: messages,
+                    model: model,
+                    parameters: .init(temperature: temperature, topProbabilityMass: topProbabilityMass, maxTokens: maxTokens)
+                )
+                
+                return .right(result)
+            }
+            case .instructGPT: do {
+                let result = try await createCompletion(
+                    model: model,
+                    prompt: prompt,
+                    parameters: .init(maxTokens: maxTokens, temperature: temperature, topProbabilityMass: topProbabilityMass)
+                )
+                
+                return .left(result)
+            }
+            default:
+                throw _PlaceholderError()
+        }
+    }
+}
+
+// MARK: - Auxiliary
 
 extension OpenAI.APIClient {
     public struct TextCompletionParameters: Codable, Hashable {
@@ -80,38 +173,6 @@ extension OpenAI.APIClient {
         }
     }
     
-    public func createCompletion(
-        model: OpenAI.Model,
-        prompt: String,
-        parameters: OpenAI.APIClient.TextCompletionParameters
-    ) async throws -> OpenAI.TextCompletion {
-        let requestBody = OpenAI.API.RequestBodies.CreateCompletion(
-            prompt: .left(prompt),
-            model: model,
-            parameters: parameters,
-            stream: false
-        )
-        
-        return try await run(\.createCompletions, with: requestBody)
-    }
-    
-    public func createCompletion(
-        model: OpenAI.Model,
-        prompts: [String],
-        parameters: OpenAI.APIClient.TextCompletionParameters
-    ) async throws -> OpenAI.TextCompletion {
-        let requestBody = OpenAI.API.RequestBodies.CreateCompletion(
-            prompt: .right(prompts),
-            model: model,
-            parameters: parameters,
-            stream: false
-        )
-        
-        return try await run(\.createCompletions, with: requestBody)
-    }
-}
-
-extension OpenAI.APIClient {
     public struct ChatCompletionParameters: Codable, Hashable, Sendable {
         public let user: String?
         public let temperature: Double?
@@ -147,94 +208,5 @@ extension OpenAI.APIClient {
             self.functions = functions
             self.functionCallingStrategy = functionCallingStrategy
         }
-    }
-    
-    public func createChatCompletion(
-        messages: [OpenAI.ChatMessage],
-        model: OpenAI.Model,
-        parameters: OpenAI.APIClient.ChatCompletionParameters
-    ) async throws -> OpenAI.ChatCompletion {
-        let requestBody = OpenAI.API.RequestBodies.CreateChatCompletion(
-            messages: messages,
-            model: model,
-            parameters: parameters,
-            stream: false
-        )
-        
-        return try await run(\.createChatCompletions, with: requestBody)
-    }
-    
-    public func createChatCompletion(
-        messages: [OpenAI.ChatMessage],
-        model: OpenAI.Model.Chat,
-        parameters: OpenAI.APIClient.ChatCompletionParameters
-    ) async throws -> OpenAI.ChatCompletion {
-        try await createChatCompletion(
-            messages: messages,
-            model: .chat(model),
-            parameters: parameters
-        )
-    }
-}
-
-extension OpenAI.APIClient {
-    public func createTextOrChatCompletion(
-        prompt: String,
-        system: String?,
-        model: OpenAI.Model,
-        temperature: Double?,
-        topProbabilityMass: Double?,
-        maxTokens: Int?
-    ) async throws -> Either<OpenAI.TextCompletion, OpenAI.ChatCompletion> {
-        switch model {
-            case .chat(let model): do {
-                let messages: [OpenAI.ChatMessage] = system.map({ [.system($0), .user(prompt)] }) ?? [.user(prompt)]
-                
-                let result = try await createChatCompletion(
-                    messages: messages,
-                    model: model,
-                    parameters: .init(temperature: temperature, topProbabilityMass: topProbabilityMass, maxTokens: maxTokens)
-                )
-                
-                return .right(result)
-            }
-            case .instructGPT: do {
-                let result = try await createCompletion(
-                    model: model,
-                    prompt: prompt,
-                    parameters: .init(maxTokens: maxTokens, temperature: temperature, topProbabilityMass: topProbabilityMass)
-                )
-                
-                return .left(result)
-            }
-            default:
-                throw _PlaceholderError()
-        }
-    }
-}
-
-extension OpenAI.API.RequestBodies.CreateChatCompletion {
-    public init(
-        messages: [OpenAI.ChatMessage],
-        model: OpenAI.Model,
-        parameters: OpenAI.APIClient.ChatCompletionParameters,
-        user: String? = nil,
-        stream: Bool
-    ) {
-        self.init(
-            user: user,
-            messages: messages,
-            functions: parameters.functions,
-            functionCallingStrategy: parameters.functionCallingStrategy,
-            model: model,
-            temperature: parameters.temperature,
-            topProbabilityMass: parameters.topProbabilityMass,
-            choices: parameters.choices,
-            stream: stream,
-            stop: parameters.stop,
-            maxTokens: parameters.maxTokens,
-            presencePenalty: parameters.presencePenalty,
-            frequencyPenalty: parameters.frequencyPenalty
-        )
     }
 }
