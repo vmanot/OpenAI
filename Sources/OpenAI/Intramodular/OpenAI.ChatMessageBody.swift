@@ -33,6 +33,14 @@ extension OpenAI {
         case functionCall(FunctionCall)
         case functionInvocation(FunctionInvocation)
         
+        var _textValue: String? {
+            guard case .text(let string) = self else {
+                return nil
+            }
+
+            return string
+        }
+        
         public static func content(_ text: String) -> Self {
             .text(text)
         }

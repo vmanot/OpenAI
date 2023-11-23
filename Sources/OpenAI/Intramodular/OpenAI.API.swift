@@ -66,8 +66,8 @@ extension OpenAI {
         
         @Header(["OpenAI-Beta": "assistants=v1"])
         @POST
-        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
         @Path("/v1/threads")
+        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
         public var createThread = Endpoint<RequestBodies.CreateThread, OpenAI.Thread, Void>()
         
         @Header(["OpenAI-Beta": "assistants=v1"])
@@ -83,6 +83,27 @@ extension OpenAI {
             "/v1/threads/\(context.input)"
         })
         public var deleteThread = Endpoint<String, JSON, Void>()
+        
+        // MARK: Messages
+        
+        @Header(["OpenAI-Beta": "assistants=v1"])
+        @POST
+        @Path({ context -> String in
+            "/v1/threads/\(context.input.thread)/messages"
+        })
+        @Body(json: \.requestBody, keyEncodingStrategy: .convertToSnakeCase)
+        public var createMessageForThread = Endpoint<
+            (thread: String, requestBody: OpenAI.API.RequestBodies.CreateMessage),
+            OpenAI.Message,
+            Void
+        >()
+        
+        @Header(["OpenAI-Beta": "assistants=v1"])
+        @GET
+        @Path({ context -> String in
+            "/v1/threads/\(context.input)/messages"
+        })
+        public var listMessagesForThread = Endpoint<String, OpenAI.List<OpenAI.Message>, Void>()
     }
 }
 
@@ -107,10 +128,14 @@ extension OpenAI.API {
         }
         
         struct _ErrorWrapper: Codable, Hashable, Sendable {
-            public struct Error: Codable, Hashable, Sendable {
+            public struct Error: Codable, Hashable, LocalizedError, Sendable {
                 public let type: String
                 public let param: AnyCodable?
                 public let message: String
+                
+                public var errorDescription: String? {
+                    message
+                }
             }
             
             public let error: Error
@@ -138,6 +163,8 @@ extension OpenAI.API {
                             throw Error.incorrectAPIKeyProvided
                         } else if _error.message.contains("Invalid content type.") {
                             throw Error.invalidContentType
+                        } else {
+                            runtimeIssue(_error)
                         }
                     }
                     

@@ -231,6 +231,45 @@ extension OpenAI.API.RequestBodies {
     }
 }
 
+extension OpenAI.API.RequestBodies {
+    public struct CreateMessage: Codable, Hashable, Sendable {
+        public enum CodingKeys: String, CodingKey {
+            case role
+            case content
+            case fileIdentifiers = "file_ids"
+            case metadata
+        }
+        
+        public let role: OpenAI.ChatRole
+        public let content: String
+        public let fileIdentifiers: [String]?
+        public let metadata: [String: String]?
+        
+        public init(
+            role: OpenAI.ChatRole,
+            content: String,
+            fileIdentifiers: [String]?,
+            metadata: [String: String]?
+        ) {
+            self.role = role
+            self.content = content
+            self.fileIdentifiers = fileIdentifiers
+            self.metadata = metadata
+        }
+        
+        public init(from message: OpenAI.ChatMessage) throws {
+            assert(message.role == .user) // only .user is supported by the API right now
+            
+            self.init(
+                role: message.role,
+                content: try message.body._textValue.unwrap(),
+                fileIdentifiers: nil,
+                metadata: nil
+            )
+        }
+    }
+}
+
 // MARK: - Auxiliary
 
 extension OpenAI.API.RequestBodies.CreateChatCompletion {

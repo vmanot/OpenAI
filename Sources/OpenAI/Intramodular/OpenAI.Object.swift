@@ -33,13 +33,13 @@ extension OpenAI {
                 case .thread:
                     return OpenAI.Thread.self
                 case .message:
-                    fatalError()
+                    return OpenAI.Message.self
                 case .assistant:
                     return OpenAI.Assistant.self
                 case .assistantFile:
                     return OpenAI.AssistantFile.self
                 case .run:
-                    fatalError()
+                    return OpenAI.Run.self
             }
         }
     }

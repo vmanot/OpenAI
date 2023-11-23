@@ -11,7 +11,7 @@ extension OpenAI.Message {
         case text = "text"
     }
     
-    public enum Content: Codable, Hashable, Sendable {
+    public enum Content: Codable, CustomDebugStringConvertible, Hashable, Sendable {
         public struct ImageFile: Codable, Hashable, Sendable {
             public let type: OpenAI.Message.ContentType
             public let imageFile: ImageFileContent
@@ -33,6 +33,15 @@ extension OpenAI.Message {
         
         case imageFile(ImageFile)
         case text(Text)
+        
+        public var debugDescription: String {
+            switch self {
+                case .imageFile:
+                    return "[image]"
+                case .text(let text):
+                    return text.text.value
+            }
+        }
     }
 }
 
