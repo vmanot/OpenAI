@@ -47,19 +47,19 @@ extension OpenAI {
 
         @POST
         @Path("/v1/embeddings")
-        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
+        @Body(json: .input, keyEncodingStrategy: .convertToSnakeCase)
         public var createEmbeddings = Endpoint<RequestBodies.CreateEmbedding, ResponseBodies.CreateEmbedding, Void>()
         
         // MARK: Completions
         
         @POST
         @Path("/v1/completions")
-        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
+        @Body(json: .input, keyEncodingStrategy: .convertToSnakeCase)
         public var createCompletions = Endpoint<RequestBodies.CreateCompletion, OpenAI.TextCompletion, Void>()
         
         @POST
-        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
         @Path("/v1/chat/completions")
+        @Body(json: .input, keyEncodingStrategy: .convertToSnakeCase)
         public var createChatCompletions = Endpoint<RequestBodies.CreateChatCompletion, OpenAI.ChatCompletion, Void>()
         
         // MARK: Threads
@@ -67,7 +67,7 @@ extension OpenAI {
         @Header(["OpenAI-Beta": "assistants=v1"])
         @POST
         @Path("/v1/threads")
-        @Body(json: \.input, keyEncodingStrategy: .convertToSnakeCase)
+        @Body(json: .input, keyEncodingStrategy: .convertToSnakeCase)
         public var createThread = Endpoint<RequestBodies.CreateThread, OpenAI.Thread, Void>()
         
         @Header(["OpenAI-Beta": "assistants=v1"])

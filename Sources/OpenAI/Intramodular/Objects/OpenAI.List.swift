@@ -23,9 +23,9 @@ extension OpenAI {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             
             self.data = try container.decode(forKey: .data)
-            self.hasMore = try container.decode(forKey: .hasMore)
-            self.firstID = try container.decode(forKey: .firstID)
-            self.lastID = try container.decode(forKey: .lastID)
+            self.hasMore = try container.decodeIfPresent(forKey: .hasMore)
+            self.firstID = try container.decodeIfPresent(forKey: .firstID)
+            self.lastID = try container.decodeIfPresent(forKey: .lastID)
             
             try super.init(from: decoder)
         }
