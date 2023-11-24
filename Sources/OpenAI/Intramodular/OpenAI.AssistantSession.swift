@@ -6,7 +6,7 @@ import NetworkKit
 import Swallow
 
 extension OpenAI {
-    public final class AssistantChatSession: ObservableObject {
+    public final class AssistantSession: ObservableObject {
         private let taskQueue = ThrowingTaskQueue()
         
         public let client: APIClient
@@ -37,10 +37,12 @@ extension OpenAI {
         
         public init(
             client: APIClient,
-            assistantID: String
+            assistantID: String,
+            tools: [OpenAI.Tool]
         ) {
             self.client = client
             self.assistantID = assistantID
+            self.tools = tools
             
             taskQueue.addTask {
                 try await self._fetchAllMessages()
