@@ -2,11 +2,25 @@
 // Copyright (c) Vatsal Manot
 //
 
-
-import Foundation
+import NetworkKit
+import Swallow
 
 extension OpenAI {
-    public struct Run: Hashable, Sendable {
+    public enum RunError: _ErrorX {
+        case expired
+        case failed
+        case unknown(AnyError)
+        
+        public init?(_catchAll error: AnyError) throws {
+            self = .unknown(error)
+        }
+    }
+}
+
+extension OpenAI {
+    public struct Run: Hashable, Identifiable, Sendable {
+        public typealias ID = _TypeAssociatedID<Self, String>
+        
         public enum Status: String, Codable, Hashable, Sendable {
             case queued
             case inProgress = "in_progress"
@@ -18,24 +32,24 @@ extension OpenAI {
             case expired
         }
         
-        public let id: String
+        public let id: ID
         public let object: OpenAI.ObjectType
         public let createdAt: Int
-        public let threadID: String
+        public let threadID: OpenAI.Thread.ID
         public let assistantID: String
         public let status: Status
         public let requiredAction: RequiredAction?
         public let lastError: LastError?
-        public let expiresAt: Int
+        public let expiresAt: Int?
         public let startedAt: Int?
         public let cancelledAt: Int?
         public let failedAt: Int?
         public let completedAt: Int?
-        public let model: String
-        public let instructions: String
-        public let tools: [OpenAI.Tool]
-        public let fileIdentifiers: [String]
-        public let metadata: [String: String]
+        public let model: String?
+        public let instructions: String?
+        public let tools: [OpenAI.Tool]?
+        public let fileIdentifiers: [String]?
+        public let metadata: [String: String]?
     }
 }
 
@@ -69,8 +83,8 @@ extension OpenAI.Run: Codable {
         case id
         case object
         case createdAt
-        case threadID
-        case assistantID
+        case threadID = "threadId"
+        case assistantID = "assistantId"
         case status
         case requiredAction
         case lastError

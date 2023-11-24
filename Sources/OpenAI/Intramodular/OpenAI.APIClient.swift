@@ -63,7 +63,7 @@ extension OpenAI.APIClient {
         
         return try await run(\.createCompletions, with: requestBody)
     }
-
+    
     public func createChatCompletion(
         messages: [OpenAI.ChatMessage],
         model: OpenAI.Model,
@@ -90,7 +90,7 @@ extension OpenAI.APIClient {
             parameters: parameters
         )
     }
-
+    
     public func createTextOrChatCompletion(
         prompt: String,
         system: String?,
@@ -123,6 +123,41 @@ extension OpenAI.APIClient {
             default:
                 throw _PlaceholderError()
         }
+    }
+}
+
+extension OpenAI.APIClient {
+    @discardableResult
+    public func createRun(
+        threadID: OpenAI.Thread.ID,
+        assistantID: String,
+        model: OpenAI.Model? = nil,
+        instructions: String? = nil,
+        tools: [OpenAI.Tool]?,
+        metadata: [String: String]? = nil
+    ) async throws -> OpenAI.Run {
+        let result = try await run(
+            \.createRun,
+             with: (
+                thread: threadID,
+                requestBody: .init(
+                    assistantID: assistantID,
+                    model: model,
+                    instructions: instructions,
+                    tools: tools,
+                    metadata: metadata
+                )
+             )
+        )
+        
+        return result
+    }
+    
+    public func retrieve(
+        run: OpenAI.Run.ID,
+        thread: OpenAI.Thread.ID
+    ) async throws -> OpenAI.Run {
+        try await self.run(\.retrieveRunForThread, with: (thread, run))
     }
 }
 

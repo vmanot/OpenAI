@@ -73,27 +73,27 @@ extension OpenAI {
         @Header(["OpenAI-Beta": "assistants=v1"])
         @GET
         @Path({ context -> String in
-            "/v1/threads/\(context.input)"
+            "/v1/threads/\(context.input.rawValue)"
         })
-        public var retrieveThread = Endpoint<String, OpenAI.Thread, Void>()
+        public var retrieveThread = Endpoint<OpenAI.Thread.ID, OpenAI.Thread, Void>()
         
         @Header(["OpenAI-Beta": "assistants=v1"])
         @DELETE
         @Path({ context -> String in
-            "/v1/threads/\(context.input)"
+            "/v1/threads/\(context.input.rawValue)"
         })
-        public var deleteThread = Endpoint<String, JSON, Void>()
+        public var deleteThread = Endpoint<OpenAI.Thread.ID, JSON, Void>()
         
         // MARK: Messages
         
         @Header(["OpenAI-Beta": "assistants=v1"])
         @POST
         @Path({ context -> String in
-            "/v1/threads/\(context.input.thread)/messages"
+            "/v1/threads/\(context.input.thread.rawValue)/messages"
         })
         @Body(json: \.requestBody, keyEncodingStrategy: .convertToSnakeCase)
         public var createMessageForThread = Endpoint<
-            (thread: String, requestBody: OpenAI.API.RequestBodies.CreateMessage),
+            (thread: OpenAI.Thread.ID, requestBody: OpenAI.API.RequestBodies.CreateMessage),
             OpenAI.Message,
             Void
         >()
@@ -103,7 +103,32 @@ extension OpenAI {
         @Path({ context -> String in
             "/v1/threads/\(context.input)/messages"
         })
-        public var listMessagesForThread = Endpoint<String, OpenAI.List<OpenAI.Message>, Void>()
+        public var listMessagesForThread = Endpoint<OpenAI.Thread.ID, OpenAI.List<OpenAI.Message>, Void>()
+        
+        // MARK: Threads
+        
+        @Header(["OpenAI-Beta": "assistants=v1"])
+        @POST
+        @Path({ context -> String in
+            "/v1/threads/\(context.input.thread.rawValue)/runs"
+        })
+        @Body(json: \.requestBody, keyEncodingStrategy: .convertToSnakeCase)
+        public var createRun = Endpoint<
+            (thread: OpenAI.Thread.ID, requestBody: OpenAI.API.RequestBodies.CreateRun),
+            OpenAI.Run,
+            Void
+        >()
+        
+        @Header(["OpenAI-Beta": "assistants=v1"])
+        @GET
+        @Path({ context -> String in
+            "/v1/threads/\(context.input.thread.rawValue)/runs/\(context.input.run.id.rawValue)"
+        })
+        public var retrieveRunForThread = Endpoint<
+            (thread: OpenAI.Thread.ID, run: OpenAI.Run.ID),
+            OpenAI.Run,
+            Void
+        >()
     }
 }
 

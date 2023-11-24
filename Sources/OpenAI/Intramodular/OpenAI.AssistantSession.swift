@@ -14,6 +14,13 @@ extension OpenAI {
         
         @MainActor
         @Published private(set) var _thread: OpenAI.Thread?
+        @MainActor
+        @Published private(set) var _latestThreadRun: OpenAI.Run?
+        
+        @MainActor
+        @Published public private(set) var messages: [OpenAI.Message] = []
+        @MainActor
+        @Published public private(set) var tools: [OpenAI.Tool] = []
         
         @MainActor
         public var thread: OpenAI.Thread {
@@ -27,9 +34,6 @@ extension OpenAI {
                 }
             }
         }
-        
-        @MainActor
-        @Published public private(set) var messages: [OpenAI.Message] = []
         
         public init(
             client: APIClient,
@@ -58,6 +62,13 @@ extension OpenAI.AssistantChatSession {
         _ message: String
     ) async throws {
         try await self.send(OpenAI.ChatMessage(role: .user, body: message))
+    }
+    
+    public func run() async throws {
+        try await self.taskQueue.perform {
+            try await _runThread()
+            try await _waitForLatestRunToComplete()
+        }
     }
     
     public func update() async throws {
@@ -99,13 +110,92 @@ extension OpenAI.AssistantChatSession {
             return
         }
         
-        let listMessagesResponse = try await self.client.run(
-            \.listMessagesForThread,
-             with: thread.id
-        )
+        let thread = try await self.thread
+        
+        let listMessagesResponse = try await _performRetryingTask {
+            try await self.client.run(
+                \.listMessagesForThread,
+                 with: thread.id
+            )
+        }
         
         assert(listMessagesResponse.hasMore == false)
         
         self.messages = listMessagesResponse.data.sorted(by: { $0.createdAt < $1.createdAt })
+    }
+    
+    
+    @MainActor
+    @discardableResult
+    private func _runThread() async throws -> OpenAI.Run {
+        if let existingRun = self._latestThreadRun {
+            try await _refreshLatestRun()
+            
+            assert(existingRun.status.isTerminal)
+            
+            self._latestThreadRun = nil
+        }
+        
+        let thread = try await thread
+        
+        if let run = _latestThreadRun {
+            assert(run.threadID == thread.id)
+            
+            return run
+        } else {
+            let run = try await client.createRun(
+                threadID: thread.id,
+                assistantID: assistantID,
+                model: nil,
+                instructions: nil,
+                tools: [.retrieval]
+            )
+            
+            self._latestThreadRun = run
+            
+            return run
+        }
+    }
+        
+    @MainActor
+    private func _waitForLatestRunToComplete(
+        timeout: DispatchTimeInterval = .seconds(10)
+    ) async throws {
+        guard _latestThreadRun != nil else {
+            assertionFailure()
+            
+            return
+        }
+        
+        try await withTaskTimeout(timeout) { @MainActor in
+            while true {
+                try Task.checkCancellation()
+                
+                let run = try await _refreshLatestRun()
+                
+                if run.status.isTerminal {
+                    try await self._fetchAllMessages()
+                    
+                    return
+                }
+                
+                try await Task.sleep(.seconds(1))
+            }
+        }
+    }
+    
+    @MainActor
+    @discardableResult
+    private func _refreshLatestRun() async throws -> OpenAI.Run {
+        let existingRun = try _latestThreadRun.unwrap()
+        let thread = try await self.thread
+        
+        let result = try await _performRetryingTask(retryDelay: .seconds(1)) {
+            try await self.client.retrieve(run: existingRun.id, thread: thread.id)
+        }
+        
+        self._latestThreadRun = result
+        
+        return result
     }
 }

@@ -29,17 +29,17 @@ extension OpenAI {
         }
         
         public static var codeInterpreter: Self {
-            .init(type: .codeInterpreter, function: nil)
+            Self(type: .codeInterpreter, function: nil)
         }
         
         public static var retrieval: Self {
-            .init(type: .retrieval, function: nil)
+            Self(type: .retrieval, function: nil)
         }
         
         public static func function(
             _ function: OpenAI.ChatFunctionDefinition
         ) -> Self {
-            .init(type: .function, function: function)
+            Self(type: .function, function: function)
         }
     }
     
@@ -87,7 +87,7 @@ extension OpenAI {
         public let tools: [Tool]
         public let fileIdentifiers: [String]
         public let metadata: [String: String]
-
+        
         public init(
             id: String,
             createdAt: Int,
@@ -124,7 +124,7 @@ extension OpenAI {
             self.tools = try container.decode(forKey: .tools)
             self.fileIdentifiers = try container.decode(forKey: .fileIdentifiers)
             self.metadata = try container.decode(forKey: .metadata)
-
+            
             try super.init(from: decoder)
         }
         

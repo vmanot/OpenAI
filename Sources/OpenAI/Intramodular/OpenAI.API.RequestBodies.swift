@@ -270,6 +270,38 @@ extension OpenAI.API.RequestBodies {
     }
 }
 
+extension OpenAI.API.RequestBodies {
+    public struct CreateRun: Codable, Hashable, Sendable {
+        public enum CodingKeys: String, CodingKey {
+            case assistantID = "assistantId"
+            case model
+            case instructions
+            case tools
+            case metadata
+        }
+        
+        public let assistantID: String
+        public let model: OpenAI.Model?
+        public let instructions: String?
+        public let tools: [OpenAI.Tool]?
+        public let metadata: [String: String]?
+        
+        public init(
+            assistantID: String,
+            model: OpenAI.Model?,
+            instructions: String?,
+            tools: [OpenAI.Tool]?,
+            metadata: [String : String]?
+        ) {
+            self.assistantID = assistantID
+            self.model = model
+            self.instructions = instructions
+            self.tools = tools
+            self.metadata = metadata
+        }
+    }
+}
+
 // MARK: - Auxiliary
 
 extension OpenAI.API.RequestBodies.CreateChatCompletion {

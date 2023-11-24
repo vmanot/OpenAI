@@ -7,13 +7,15 @@ import Swift
 
 extension OpenAI {
     public final class Thread: OpenAI.Object {
+        public typealias ID = _TypeAssociatedID<Thread, String>
+        
         private enum CodingKeys: String, CodingKey {
             case id
             case createdAt
             case metadata
         }
         
-        public let id: String
+        public let id: ID
         public let createdAt: Int
         public let metadata: [String: String]
         
