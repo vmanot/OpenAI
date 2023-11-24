@@ -5,7 +5,9 @@
 @_spi(Internal) import LargeLanguageModels
 
 extension OpenAI.ChatMessage: _PromptLiteralEncodingContainer {
-    public mutating func encode(_ component: PromptLiteral._Degenerate.Component) throws {
+    public mutating func encode(
+        _ component: PromptLiteral._Degenerate.Component
+    ) throws {
         var content: [OpenAI.ChatMessageBody._Content] = []
         
         switch self.body {

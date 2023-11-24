@@ -11,7 +11,7 @@ extension OpenAI {
     public struct ChatMessage: Hashable, Sendable {
         public let role: ChatRole
         public let body: ChatMessageBody
-        
+                
         public init(role: ChatRole, body: ChatMessageBody) {
             switch body {
                 case .text:
@@ -98,11 +98,11 @@ extension OpenAI {
 }
 
 extension OpenAI.ChatMessage: Codable {
-   public enum CodingKeys: CodingKey {
-       case role
-       case content
-       case name
-       case functionCall
+    public enum CodingKeys: CodingKey {
+        case role
+        case content
+        case name
+        case functionCall
     }
     
     public init(from decoder: Decoder) throws {
@@ -145,7 +145,7 @@ extension OpenAI.ChatMessage: Codable {
                 try container.encodeNil(forKey: .content)
             case .functionInvocation(let invocation):
                 try _tryAssert(role == .function)
-
+                
                 try container.encode(invocation.name, forKey: .name)
                 try container.encode(invocation.response, forKey: .content)
         }
