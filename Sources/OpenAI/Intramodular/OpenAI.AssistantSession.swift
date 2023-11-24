@@ -18,9 +18,9 @@ extension OpenAI {
         @Published private(set) var _latestThreadRun: OpenAI.Run?
         
         @MainActor
-        @Published public private(set) var messages: [OpenAI.Message] = []
+        @Published public private(set) var messages: [OpenAI.Message]
         @MainActor
-        @Published public private(set) var tools: [OpenAI.Tool] = []
+        @Published public private(set) var tools: [OpenAI.Tool]
         
         @MainActor
         public var thread: OpenAI.Thread {
@@ -35,6 +35,7 @@ extension OpenAI {
             }
         }
         
+        @MainActor
         public init(
             client: APIClient,
             assistantID: String,
@@ -42,6 +43,7 @@ extension OpenAI {
         ) {
             self.client = client
             self.assistantID = assistantID
+            self.messages = []
             self.tools = tools
             
             taskQueue.addTask {
@@ -51,7 +53,7 @@ extension OpenAI {
     }
 }
 
-extension OpenAI.AssistantChatSession {
+extension OpenAI.AssistantSession {
     public func send(
         _ message: OpenAI.ChatMessage
     ) async throws {
@@ -78,8 +80,10 @@ extension OpenAI.AssistantChatSession {
     }
 }
 
-extension OpenAI.AssistantChatSession {
-    @MainActor
+// MARK: - Internal
+
+@MainActor
+extension OpenAI.AssistantSession {
     private func _createThread(
         messages: [OpenAI.ChatMessage]
     ) async throws -> OpenAI.Thread {
@@ -93,7 +97,7 @@ extension OpenAI.AssistantChatSession {
     }
     
     @MainActor
-    public func _createMessageAndSend(
+    private func _createMessageAndSend(
         _ message: OpenAI.ChatMessage
     ) async throws {
         if _thread != nil && messages.isEmpty {
@@ -106,7 +110,6 @@ extension OpenAI.AssistantChatSession {
         self.messages.append(message)
     }
     
-    @MainActor
     private func _fetchAllMessages() async throws {
         guard _thread != nil else {
             return
@@ -127,7 +130,6 @@ extension OpenAI.AssistantChatSession {
     }
     
     
-    @MainActor
     @discardableResult
     private func _runThread() async throws -> OpenAI.Run {
         if let existingRun = self._latestThreadRun {
@@ -158,8 +160,7 @@ extension OpenAI.AssistantChatSession {
             return run
         }
     }
-        
-    @MainActor
+    
     private func _waitForLatestRunToComplete(
         timeout: DispatchTimeInterval = .seconds(10)
     ) async throws {
@@ -186,7 +187,6 @@ extension OpenAI.AssistantChatSession {
         }
     }
     
-    @MainActor
     @discardableResult
     private func _refreshLatestRun() async throws -> OpenAI.Run {
         let existingRun = try _latestThreadRun.unwrap()
