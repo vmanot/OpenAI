@@ -37,8 +37,6 @@ extension OpenAI.ChatMessage: _PromptLiteralEncodingContainer {
                         )
                         
                 }
-            case .dynamicVariable:
-                throw Never.Reason.unsupported
             case .functionCall:
                 throw Never.Reason.unsupported
             case .functionInvocation:
