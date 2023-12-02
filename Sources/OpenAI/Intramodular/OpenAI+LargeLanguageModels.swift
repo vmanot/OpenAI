@@ -74,23 +74,16 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         
         let text = try completion.choices.toCollectionOfOne().first.text
         
-        let debug = String.concatenate(separator: "\n") {
-            "==="
-            "Prompt:"
-            prompt.debugDescription
+        _debugPrint(
+            prompt: prompt.debugDescription
                 .delimited(by: .quotationMark)
                 .delimited(by: "\n")
-            "==="
-            "Completion:"
-            text
+            ,
+            completion: text
                 .delimited(by: .quotationMark)
                 .delimited(by: "\n")
-            "==="
-        }
-        
-        if _isDebugAssertConfiguration {
-            print(debug)
-        }
+        )
+
         
         return .init(prefix: promptText, text: text)
     }
@@ -105,7 +98,7 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         
         let model: OpenAI.Model
         
-        let containsImage = prompt.messages.contains(where: { $0.content._containsImages })
+        let containsImage = try prompt.messages.contains(where: { try $0.content._containsImages })
         
         if containsImage {
             model = .chat(.gpt_4_vision_preview)
@@ -135,24 +128,35 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         
         let message = try completion.choices.toCollectionOfOne().first.message
         
-        let debug = String.concatenate(separator: "\n") {
-            "==="
-            "Prompt:"
-            prompt.debugDescription
-            "==="
-            "Completion:"
-            message.body
+        _debugPrint(
+            prompt: prompt.debugDescription,
+            completion: message.body
                 .description
                 .delimited(by: .quotationMark)
                 .delimited(by: "\n")
-            "==="
-        }
-        
-        if _isDebugAssertConfiguration {
-            print(debug)
-        }
-        
+        )
+            
         return .init(message: try .init(from: message))
+    }
+    
+    private func _debugPrint(prompt: String, completion: String) {
+        guard _isDebugAssertConfiguration else {
+            return
+        }
+        
+        let description = String.concatenate(separator: "\n") {
+            "=== [PROMPT START] ==="
+            prompt.debugDescription
+                .delimited(by: .quotationMark)
+                .delimited(by: "\n")
+            "==== [COMPLETION] ===="
+            completion
+                .delimited(by: .quotationMark)
+                .delimited(by: "\n")
+            "==== [PROMPT END] ===="
+        }
+        
+        print(description)
     }
 }
 
