@@ -2,6 +2,7 @@
 // Copyright (c) Vatsal Manot
 //
 
+import CoreGML
 import CorePersistence
 import Diagnostics
 @_spi(Internal) import LargeLanguageModels
@@ -20,7 +21,7 @@ extension OpenAI.APIClient: DependenciesExporting {
 }
 
 extension OpenAI.APIClient: LargeLanguageModelServices {
-    public var _availableLargeLanguageModels: [_MLModelIdentifier]? {
+    public var _availableLargeLanguageModels: [_GMLModelIdentifier]? {
         nil
     }
     
@@ -93,27 +94,21 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         parameters: AbstractLLM.ChatCompletionParameters,
         heuristics: AbstractLLM.CompletionHeuristics
     ) async throws -> AbstractLLM.ChatCompletion {
-        var prompt = prompt
+        let model = try self.model(for: prompt, parameters: parameters, heuristics: heuristics)
         let parameters = try cast(parameters, to: AbstractLLM.ChatCompletionParameters.self)
+        let maxTokens: Int?
         
-        let model: OpenAI.Model
-        
-        let containsImage = try prompt.messages.contains(where: { try $0.content._containsImages })
-        
-        if containsImage {
-            model = .chat(.gpt_4_vision_preview)
-        } else if heuristics.wantsMaximumReasoning {
-            model = .chat(.gpt_4_1106_preview)
-        } else {
-            model = .chat(.gpt_3_5_turbo)
-        }
-        
-        if model == .chat(.gpt_3_5_turbo) {
-            prompt.messages._forEach(mutating: {
-                if $0.role == .system {
-                    $0 = .init(role: .user, content: $0.content)
-                }
-            })
+        do {
+            switch (parameters.tokenLimit) {
+                case .fixed(let count):
+                    maxTokens = count
+                case .max, .none:
+                    let tokenizer = try await tokenizer(for: model)
+                    let tokens = try tokenizer.encode(prompt._rawContent)
+                    let contextSize = try model.contextSize
+                    
+                    maxTokens = contextSize - tokens.count
+            }
         }
         
         let completion = try await self.createChatCompletion(
@@ -122,7 +117,8 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
             parameters: .init(
                 from: parameters,
                 model: model,
-                messages: prompt.messages
+                messages: prompt.messages,
+                maxTokens: maxTokens
             )
         )
         
@@ -158,6 +154,65 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         
         print(description)
     }
+    
+    private func model(
+        for prompt: AbstractLLM.ChatPrompt,
+        parameters: AbstractLLM.ChatCompletionParameters,
+        heuristics: AbstractLLM.CompletionHeuristics
+    ) throws -> OpenAI.Model {
+        var prompt = prompt
+        
+        let result: OpenAI.Model
+        
+        let containsImage = try prompt.messages.contains(where: { try $0.content._containsImages })
+        
+        if containsImage {
+            result = .chat(.gpt_4_vision_preview)
+        } else if heuristics.wantsMaximumReasoning {
+            result = .chat(.gpt_4_1106_preview)
+        } else {
+            result = .chat(.gpt_3_5_turbo)
+        }
+        
+        if result == .chat(.gpt_3_5_turbo) {
+            prompt.messages._forEach(mutating: {
+                if $0.role == .system {
+                    $0 = .init(role: .user, content: $0.content)
+                }
+            })
+        }
+        
+        return result
+    }
+    
+    private func tokenizer(
+        for model: OpenAI.Model
+    ) async throws -> OpenAI.APIClient._Tokenizer {
+        try await .init(model: model)
+    }
+}
+
+extension OpenAI.APIClient {
+    public struct _Tokenizer: PromptLiteralTokenizer {
+        public typealias Token = Int
+        public typealias Output = [Int]
+        
+        private let model: OpenAI.Model
+        private var base: Tiktoken.Encoding
+        
+        public init(model: OpenAI.Model) async throws {
+            self.model = model
+            self.base = try await Tiktoken.encoding(for: model).unwrap()
+        }
+        
+        public func encode(_ input: PromptLiteral) throws -> Output {
+            try base.encode(input._stripToText())
+        }
+        
+        public func decode(_ tokens: Output) throws -> PromptLiteral {
+            fatalError()
+        }
+    }
 }
 
 extension OpenAI.APIClient: TextEmbeddingsProvider {
@@ -171,7 +226,7 @@ extension OpenAI.APIClient: TextEmbeddingsProvider {
             )
         }
         
-        let model = _MLModelIdentifier(from: OpenAI.Model.Embedding.ada)
+        let model = _GMLModelIdentifier(from: OpenAI.Model.Embedding.ada)
         
         if request.model != nil {
             try _tryAssert(request.model == model)
@@ -198,7 +253,7 @@ extension OpenAI.APIClient: TextEmbeddingsProvider {
 
 // MARK: - Auxiliary
 
-extension _MLModelIdentifier {
+extension _GMLModelIdentifier {
     public init(
         from model: OpenAI.Model.InstructGPT
     ) {
@@ -237,13 +292,14 @@ extension OpenAI.APIClient.ChatCompletionParameters {
     public init(
         from parameters: AbstractLLM.ChatCompletionParameters,
         model: OpenAI.Model,
-        messages _: [AbstractLLM.ChatMessage]
+        messages _: [AbstractLLM.ChatMessage],
+        maxTokens: Int? = nil
     ) throws {
         self.init(
             temperature: parameters.temperatureOrTopP?.temperature,
             topProbabilityMass: parameters.temperatureOrTopP?.topProbabilityMass,
             stop: parameters.stops,
-            maxTokens: try model.contextSize / 2, // FIXME!!!
+            maxTokens: maxTokens ?? (try? model.contextSize / 2), // FIXME!!!
             functions: parameters.functions?.map {
                 OpenAI.ChatFunctionDefinition(from: $0)
             }

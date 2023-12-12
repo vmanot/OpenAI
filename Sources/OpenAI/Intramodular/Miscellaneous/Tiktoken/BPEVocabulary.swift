@@ -26,6 +26,7 @@ public struct BPEVocabulary {
     }
 }
 
+
 public extension BPEVocabulary {
     static var gpt2: BPEVocabulary {
         .init(name: "gpt2",

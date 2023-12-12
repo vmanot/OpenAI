@@ -7,7 +7,7 @@
 import XCTest
 
 final class OpenAITests: XCTestCase {    
-    private let client = OpenAI.APIClient(apiKey: nil)
+    private let client = OpenAI.APIClient(apiKey: "xxx")
     
     func testCreateEmbeddings() async throws {
         let result = try await client.createEmbeddings(
@@ -15,7 +15,7 @@ final class OpenAITests: XCTestCase {
             for: ["An Amazon review with a positive sentiment."]
         )
         
-        print(result)
+        _ = result
     }
     
     func testTextCompletions() async throws {
@@ -29,7 +29,7 @@ She no went to the market.
             parameters: .init(maxTokens: 60, topProbabilityMass: 1)
         )
         
-        print(result.choices)
+        _ = result
     }
     
     func testChatCompletions() async throws {        

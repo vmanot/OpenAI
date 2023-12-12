@@ -2,6 +2,7 @@
 // Copyright (c) Vatsal Manot
 //
 
+import CoreGML
 import LargeLanguageModels
 import NetworkKit
 import Swift
@@ -33,6 +34,14 @@ extension OpenAI {
         case codex(Codex)
         
         case unknown(String)
+        
+        public var name: String {
+            if let base = (base as? any Named) {
+                return base.name.description
+            } else {
+                return base.rawValue
+            }
+        }
         
         private var base: any OpenAI._ModelType {
             switch self {
@@ -151,9 +160,10 @@ extension OpenAI.Model {
 }
 
 extension OpenAI.Model {
-    public enum Chat: String, OpenAI._ModelType, CaseIterable {
+    public enum Chat: String, Named, OpenAI._ModelType, CaseIterable {
         case gpt_3_5_turbo = "gpt-3.5-turbo"
         case gpt_3_5_turbo_16k = "gpt-3.5-turbo-16k"
+        
         case gpt_4 = "gpt-4"
         case gpt_4_32k = "gpt-4-32k"
         case gpt_4_1106_preview = "gpt-4-1106-preview"
@@ -162,11 +172,43 @@ extension OpenAI.Model {
         case gpt_3_5_turbo_0301 = "gpt-3.5-turbo-0301"
         case gpt_3_5_turbo_0613 = "gpt-3.5-turbo-0613"
         case gpt_3_5_turbo_16k_0613 = "gpt-3.5-turbo-16k-0613"
+        
         case gpt_4_0314 = "gpt-4-0314"
         case gpt_4_0613 = "gpt-4-0613"
         case gpt_4_32k_0314 = "gpt-4-32k-0314"
         case gpt_4_32k_0613 = "gpt-4-32k-0613"
 
+        public var name: String {
+            switch self {
+                case .gpt_3_5_turbo:
+                    return "ChatGPT 3.5"
+                case .gpt_3_5_turbo_16k:
+                    return "ChatGPT 3.5"
+                case .gpt_4:
+                    return "ChatGPT 4"
+                case .gpt_4_32k:
+                    return "ChatGPT 4"
+                case .gpt_4_1106_preview:
+                    return "GPT-4 Turbo"
+                case .gpt_4_vision_preview:
+                    return "GPT-4V"
+                case .gpt_3_5_turbo_0301:
+                    return "GPT-3.5"
+                case .gpt_3_5_turbo_0613:
+                    return "GPT-3.5"
+                case .gpt_3_5_turbo_16k_0613:
+                    return "GPT-3.5"
+                case .gpt_4_0314:
+                    return "GPT-4"
+                case .gpt_4_0613:
+                    return "GPT-4"
+                case .gpt_4_32k_0314:
+                    return "GPT-4"
+                case .gpt_4_32k_0613:
+                    return "GPT-4"
+            }
+        }
+        
         public var contextSize: Int {
             let _4k = 4096
             let _8k = 8192
@@ -219,17 +261,21 @@ extension OpenAI.Model: Codable {
     }
 }
 
-extension OpenAI.Model: _MLModelIdentifierRepresentable {
-    public init(from model: _MLModelIdentifier) throws {
+extension OpenAI.Model: _GMLModelIdentifierRepresentable {
+    private enum _DecodingError: Error {
+        case invalidModelProvider
+    }
+    
+    public init(from model: _GMLModelIdentifier) throws {
         guard model.provider == .openAI else {
-            throw _PlaceholderError()
+            throw _DecodingError.invalidModelProvider
         }
         
         self = try Self(rawValue: model.name).unwrap()
     }
     
-    public func __conversion() -> _MLModelIdentifier {
-        _MLModelIdentifier(
+    public func __conversion() -> _GMLModelIdentifier {
+        _GMLModelIdentifier(
             provider: .openAI,
             name: rawValue,
             revision: nil

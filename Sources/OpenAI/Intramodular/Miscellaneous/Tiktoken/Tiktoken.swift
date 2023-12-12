@@ -5,15 +5,11 @@
 import Foundation
 import Swallow
 
-public struct Tiktoken {
-    private init() {
-        
-    }
-    
+public enum Tiktoken {    
     public static func encoding(
         for model: OpenAI.Model
     ) async throws -> Encoding? {
-        guard let vocabulary = model.vocabulary else {
+        guard let vocabulary = model.bpeVocabulary else {
             return nil
         }
         
