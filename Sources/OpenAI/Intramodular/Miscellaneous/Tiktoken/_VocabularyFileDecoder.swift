@@ -37,6 +37,16 @@ struct _VocabularyFileDecoder {
 
 extension String {
     fileprivate var utf16AsUInt8Array: [UInt8] {
-        utf16.map({ UInt8($0) })
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(utf16.count * 2)
+        
+        for codeUnit in utf16 {
+            let highByte = UInt8(codeUnit >> 8)
+            let lowByte = UInt8(codeUnit & 0xFF)
+            if highByte != 0 { bytes.append(highByte) }
+            bytes.append(lowByte)
+        }
+        
+        return bytes
     }
 }

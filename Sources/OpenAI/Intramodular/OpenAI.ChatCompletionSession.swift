@@ -2,6 +2,7 @@
 // Copyright (c) Vatsal Manot
 //
 
+import CorePersistence
 import Diagnostics
 import Foundation
 import Merge
@@ -91,7 +92,19 @@ extension OpenAI.ChatCompletionSession {
             let httpResponse = response as? HTTPURLResponse,
             httpResponse.statusCode == 200
         else {
-            throw _Error.responseError
+            do {
+                var iterator = bytes.lines.makeAsyncIterator()
+                let lines = try await iterator.exhaust()
+                let json = try JSON(jsonString: lines.joined(separator: ""))
+                
+                throw _Error.responseError(json)
+            } catch {
+                if error is _Error {
+                    throw error
+                } else {
+                    throw _Error.responseError(nil)
+                }
+            }
         }
         
         return bytes
@@ -218,7 +231,7 @@ extension OpenAI.ChatCompletionSession {
 
 extension OpenAI.ChatCompletionSession {
     public enum _Error: Error {
-        case responseError
+        case responseError(JSON?)
         case streamIsInvalid
     }
 }
