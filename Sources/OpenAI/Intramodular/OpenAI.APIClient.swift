@@ -2,11 +2,16 @@
 // Copyright (c) Vatsal Manot
 //
 
+import LargeLanguageModels
 import NetworkKit
 import Swift
 
 extension OpenAI {
-    public final class APIClient: HTTPClient {
+    public final class APIClient: HTTPClient, PersistentlyRepresentableType {
+        public static var persistentTypeRepresentation: some IdentityRepresentation {
+            _GMLModelServiceTypeIdentifier._OpenAI
+        }
+
         public let interface: API
         public let session: HTTPSession
         

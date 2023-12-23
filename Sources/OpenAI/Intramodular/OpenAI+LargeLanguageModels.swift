@@ -21,10 +21,50 @@ extension OpenAI.APIClient: DependenciesExporting {
 }
 
 extension OpenAI.APIClient: LargeLanguageModelServices {
-    public var _availableLargeLanguageModels: [_GMLModelIdentifier]? {
-        nil
+    public var _availableLLMs: [_GMLModelIdentifier]? {
+        OpenAI.Model.allCases.map({ $0.__conversion() })
     }
     
+    public func completion(
+        for prompt: AbstractLLM.ChatPrompt
+    ) throws -> AbstractLLM.ChatCompletionStream {
+        AbstractLLM.ChatCompletionStream {
+            try await self._completion(for: prompt)
+        }
+    }
+    
+    private func _completion(
+        for prompt: AbstractLLM.ChatPrompt
+    ) async throws -> AsyncThrowingStream<AbstractLLM.ChatCompletionStream.Event, Error> {
+        let stream = OpenAI.ChatCompletionSession(client: self)
+        
+        let messages: [OpenAI.ChatMessage] = try prompt.messages.map {
+            try OpenAI.ChatMessage(from: $0)
+        }
+        let model: OpenAI.Model = try self._model(for: prompt, parameters: nil, heuristics: nil)
+        let parameters: OpenAI.APIClient.ChatCompletionParameters = try await self._chatCompletionParameters(
+            from: prompt.context.completionParameters,
+            for: prompt,
+            completionHeuristics: nil
+        )
+        
+        return try await stream
+            .complete(
+                messages: messages,
+                model: model,
+                parameters: parameters
+            )
+            .map { (message: OpenAI.ChatMessage) -> AbstractLLM.ChatCompletionStream.Event  in
+                AbstractLLM.ChatCompletionStream.Event.completion(
+                    AbstractLLM.ChatCompletion.Partial(
+                        message: .init(whole: try AbstractLLM.ChatMessage(from: message)),
+                        stopReason: nil
+                    )
+                )
+            }
+            .eraseToThrowingStream()
+    }
+
     public func complete<Prompt: AbstractLLM.Prompt>(
         prompt: Prompt,
         parameters: Prompt.CompletionParameters,
@@ -94,7 +134,7 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         parameters: AbstractLLM.ChatCompletionParameters,
         heuristics: AbstractLLM.CompletionHeuristics
     ) async throws -> AbstractLLM.ChatCompletion {
-        let model = try self.model(for: prompt, parameters: parameters, heuristics: heuristics)
+        let model = try self._model(for: prompt, parameters: parameters, heuristics: heuristics)
         let parameters = try cast(parameters, to: AbstractLLM.ChatCompletionParameters.self)
         let maxTokens: Int?
         
@@ -103,11 +143,12 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
                 case .fixed(let count):
                     maxTokens = count
                 case .max, .none:
-                    let tokenizer = try await tokenizer(for: model)
+                    /*let tokenizer = try await tokenizer(for: model)
                     let tokens = try tokenizer.encode(prompt._rawContent)
                     let contextSize = try model.contextSize
                     
-                    maxTokens = contextSize - tokens.count
+                    maxTokens = contextSize - tokens.count*/
+                    maxTokens = nil
             }
         }
         
@@ -155,12 +196,50 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         print(description)
     }
     
-    private func model(
+    private func _chatCompletionParameters(
+        from parameters: (any AbstractLLM.CompletionParameters)?,
         for prompt: AbstractLLM.ChatPrompt,
-        parameters: AbstractLLM.ChatCompletionParameters,
-        heuristics: AbstractLLM.CompletionHeuristics
+        completionHeuristics: AbstractLLM.CompletionHeuristics
+    ) async throws -> OpenAI.APIClient.ChatCompletionParameters {
+        let parameters: AbstractLLM.ChatCompletionParameters = try cast(parameters ?? AbstractLLM.ChatCompletionParameters())
+        let model: OpenAI.Model = try self._model(
+            for: prompt,
+            parameters: parameters,
+            heuristics: completionHeuristics
+        )
+        let maxTokens: Int?
+        
+        do {
+            switch (parameters.tokenLimit) {
+                case .fixed(let count):
+                    maxTokens = count
+                case .max, .none:
+                    maxTokens = nil
+            }
+        }
+        
+        return try OpenAI.APIClient.ChatCompletionParameters(
+            from: parameters,
+            model: model,
+            messages: prompt.messages,
+            maxTokens: maxTokens
+        )
+    }
+    
+    private func _model(
+        for prompt: AbstractLLM.ChatPrompt,
+        parameters: AbstractLLM.ChatCompletionParameters?,
+        heuristics: AbstractLLM.CompletionHeuristics?
     ) throws -> OpenAI.Model {
         var prompt = prompt
+        
+        if let modelIdentifierScope = prompt.context.get(\.modelIdentifier) {
+            if let modelIdentifier = modelIdentifierScope._oneValue {
+                return try OpenAI.Model(from: modelIdentifier)
+            } else {
+                fatalError(.unimplemented)
+            }
+        }
         
         let result: OpenAI.Model
         
@@ -168,7 +247,7 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
         
         if containsImage {
             result = .chat(.gpt_4_vision_preview)
-        } else if heuristics.wantsMaximumReasoning {
+        } else if (heuristics?.wantsMaximumReasoning ?? false) {
             result = .chat(.gpt_4_1106_preview)
         } else {
             result = .chat(.gpt_3_5_turbo)
@@ -280,7 +359,7 @@ extension OpenAI.APIClient.TextCompletionParameters {
         prompt _: any PromptLiteralConvertible
     ) throws {
         self.init(
-            maxTokens: try model.contextSize / 2, // FIXME!!!
+            maxTokens: nil,
             temperature: parameters.temperatureOrTopP?.temperature,
             topProbabilityMass: parameters.temperatureOrTopP?.topProbabilityMass,
             stop: parameters.stops.map(Either.right)
@@ -299,7 +378,7 @@ extension OpenAI.APIClient.ChatCompletionParameters {
             temperature: parameters.temperatureOrTopP?.temperature,
             topProbabilityMass: parameters.temperatureOrTopP?.topProbabilityMass,
             stop: parameters.stops,
-            maxTokens: maxTokens ?? (try? model.contextSize / 2), // FIXME!!!
+            maxTokens: maxTokens,
             functions: parameters.functions?.map {
                 OpenAI.ChatFunctionDefinition(from: $0)
             }

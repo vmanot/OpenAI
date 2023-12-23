@@ -26,5 +26,18 @@ extension OpenAI {
                     self = .function
             }
         }
+        
+        public func __conversion() throws -> AbstractLLM.ChatRole {
+            switch self {
+                case .system:
+                    return .system
+                case .user:
+                    return .user
+                case .assistant:
+                    return .assistant
+                case .function:
+                    return .other(.function)
+            }
+        }
     }
 }

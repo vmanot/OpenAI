@@ -48,6 +48,7 @@ extension OpenAI.ChatMessage {
         from message: OpenAI.Message
     ) throws {
         self.init(
+            id: message.id,
             role: message.role,
             body: try .content(message.content.map {
                 try OpenAI.ChatMessageBody._Content(from: $0)

@@ -33,6 +33,19 @@ extension OpenAI {
         case functionCall(FunctionCall)
         case functionInvocation(FunctionInvocation)
         
+        public var isEmpty: Bool {
+            switch self {
+                case .text(let text):
+                    return text.isEmpty
+                case .content(let content):
+                    return content.isEmpty
+                case .functionCall:
+                    return false
+                case .functionInvocation:
+                    return false
+            }
+        }
+        
         var _textValue: String? {
             guard case .text(let string) = self else {
                 return nil
@@ -43,6 +56,23 @@ extension OpenAI {
         
         public static func content(_ text: String) -> Self {
             .text(text)
+        }
+        
+        public mutating func append(_ newText: String) throws {
+            switch self {
+                case .text(let text):
+                    self = .text(text.appending(contentsOf: newText))
+                case .content(let content):
+                    self = .content(content.appending(.text(newText)))
+                case .functionCall:
+                    throw Never.Reason.illegal
+                case .functionInvocation:
+                    throw Never.Reason.illegal
+            }
+        }
+        
+        public static func += (lhs: inout Self, rhs: String) throws {
+            try lhs.append(rhs)
         }
     }
 }

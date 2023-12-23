@@ -8,6 +8,8 @@ extension OpenAI.ChatMessage: _PromptLiteralEncodingContainer {
     public mutating func encode(
         _ component: PromptLiteral._Degenerate.Component
     ) throws {
+        assert(body.isEmpty)
+        
         var content: [OpenAI.ChatMessageBody._Content] = []
         
         switch self.body {
@@ -43,7 +45,11 @@ extension OpenAI.ChatMessage: _PromptLiteralEncodingContainer {
                 throw Never.Reason.unsupported
         }
         
-        self = .init(role: role, body: .content(content))
+        self = .init(
+            id: nil, // FIXME!!!
+            role: role,
+            body: .content(content)
+        )
     }
 }
 
@@ -70,11 +76,13 @@ extension OpenAI.ChatMessage {
             switch try _content.components.toCollectionOfOne().value.payload {
                 case .functionCall(let call):
                     self.init(
+                        id: nil, // FIXME!!!
                         role: role,
                         body: .functionCall(.init(name: call.name, arguments: call.arguments))
                     )
                 case .functionInvocation(let invocation):
                     self.init(
+                        id: nil, // FIXME!!!
                         role: role,
                         body: .functionInvocation(.init(name: invocation.name, response: invocation.result.rawValue))
                     )
@@ -84,7 +92,11 @@ extension OpenAI.ChatMessage {
                     throw Never.Reason.illegal
             }
         } else {
-            var _temp = Self(role: role, body: .content([]))
+            var _temp = Self(
+                id: nil, // FIXME!!!
+                role: role,
+                body: .content([])
+            )
             
             try message.content._encode(to: &_temp)
             
@@ -97,6 +109,7 @@ extension AbstractLLM.ChatMessage {
     public init(
         from message: OpenAI.ChatMessage
     ) throws {
+        let id = message.id
         let role: AbstractLLM.ChatRole
         
         switch message.role {
@@ -113,6 +126,7 @@ extension AbstractLLM.ChatMessage {
         switch message.body {
             case .text(let content):
                 self.init(
+                    id: AnyPersistentIdentifier(erasing: id),
                     role: role,
                     content: PromptLiteral(
                         content,
@@ -121,6 +135,7 @@ extension AbstractLLM.ChatMessage {
                 )
             case .content(let content):
                 self.init(
+                    id: AnyPersistentIdentifier(erasing: id),
                     role: role,
                     content: PromptLiteral(
                         from: content,
@@ -129,6 +144,7 @@ extension AbstractLLM.ChatMessage {
                 )
             case .functionCall(let call):
                 self.init(
+                    id: AnyPersistentIdentifier(erasing: id),
                     role: role,
                     content: try PromptLiteral(
                         functionCall: .init(name: call.name, arguments: call.arguments),
@@ -137,6 +153,7 @@ extension AbstractLLM.ChatMessage {
                 )
             case .functionInvocation(let invocation):
                 self.init(
+                    id: AnyPersistentIdentifier(erasing: id),
                     role: role,
                     content: try .init(
                         functionInvocation: .init(
@@ -151,6 +168,32 @@ extension AbstractLLM.ChatMessage {
 }
 
 extension PromptLiteral {
+    public init(from message: OpenAI.ChatMessage) throws {
+        let role: PromptMatterRole
+        
+        switch message.role {
+            case .system:
+                role = .chat(.system)
+            case .user:
+                role = .chat(.user)
+            case .assistant:
+                role = .chat(.assistant)
+            case .function:
+                role = .chat(.other(.function))
+        }
+        
+        switch message.body {
+            case .text(let text):
+                self.init(from: [.text(text)], role: role)
+            case .content(let content):
+                self.init(from: content, role: role)
+            case .functionCall:
+                TODO.unimplemented
+            case .functionInvocation:
+                TODO.unimplemented
+        }
+    }
+    
     init(
         from contents: [OpenAI.ChatMessageBody._Content],
         role: PromptMatterRole
@@ -160,11 +203,21 @@ extension PromptLiteral {
         for content in contents {
             switch content {
                 case .text(let content):
-                    components.append(PromptLiteral.StringInterpolation.Component(payload: .stringLiteral(content), role: role))
+                    components.append(
+                        PromptLiteral.StringInterpolation.Component(
+                            payload: .stringLiteral(content),
+                            role: role
+                        )
+                    )
                 case .imageURL(let image):
                     assert(image.detail == .auto) // FIXME
                     
-                    components.append(PromptLiteral.StringInterpolation.Component(payload: .image(.url(image.url)), role: role))
+                    components.append(
+                        PromptLiteral.StringInterpolation.Component(
+                            payload: .image(.url(image.url)),
+                            role: role
+                        )
+                    )
             }
         }
         

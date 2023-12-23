@@ -17,12 +17,15 @@ extension OpenAI {
 
 extension OpenAI {
     public enum Model: CaseIterable, OpenAI._ModelType, Hashable {
-        public static var allCases: [Model] {
-            let chat = Chat.allCases.map({ Self.chat($0) })
-            let instructGPT = InstructGPT.allCases.map({ Self.instructGPT($0) })
+        public private(set) static var allCases: [Model] = {
+            var result: [Model] = []
             
-            return chat + instructGPT
-        }
+            result += InstructGPT.allCases.map({ Self.instructGPT($0) })
+            result += Embedding.allCases.map({ Self.embedding($0 )})
+            result += Chat.allCases.map({ Self.chat($0) })
+            
+            return result
+        }()
         
         case instructGPT(InstructGPT)
         case embedding(Embedding)
@@ -168,7 +171,7 @@ extension OpenAI.Model {
         case gpt_4_32k = "gpt-4-32k"
         case gpt_4_1106_preview = "gpt-4-1106-preview"
         case gpt_4_vision_preview = "gpt-4-vision-preview"
-
+        
         case gpt_3_5_turbo_0301 = "gpt-3.5-turbo-0301"
         case gpt_3_5_turbo_0613 = "gpt-3.5-turbo-0613"
         case gpt_3_5_turbo_16k_0613 = "gpt-3.5-turbo-16k-0613"
@@ -177,7 +180,7 @@ extension OpenAI.Model {
         case gpt_4_0613 = "gpt-4-0613"
         case gpt_4_32k_0314 = "gpt-4-32k-0314"
         case gpt_4_32k_0613 = "gpt-4-32k-0613"
-
+        
         public var name: String {
             switch self {
                 case .gpt_3_5_turbo:
@@ -216,7 +219,7 @@ extension OpenAI.Model {
             let _32k = 16384
             
             // let _128k = 131072
-
+            
             switch self {
                 case .gpt_3_5_turbo:
                     return _4k

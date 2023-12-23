@@ -9,10 +9,17 @@ import Swallow
 
 extension OpenAI {
     public struct ChatMessage: Hashable, Sendable {
+        public typealias ID = String
+        
+        public let id: ID
         public let role: ChatRole
-        public let body: ChatMessageBody
+        public var body: ChatMessageBody
                 
-        public init(role: ChatRole, body: ChatMessageBody) {
+        public init(
+            id: ID? = nil,
+            role: ChatRole,
+            body: ChatMessageBody
+        ) {
             switch body {
                 case .text:
                     assert(role != .function)
@@ -24,12 +31,9 @@ extension OpenAI {
                     assert(role == .function)
             }
             
+            self.id = id ?? UUID().stringValue // FIXME!!!
             self.role = role
             self.body = body
-        }
-        
-        public init(role: ChatRole, body: String) {
-            self.init(role: role, body: .content(body))
         }
     }
     
@@ -97,8 +101,21 @@ extension OpenAI {
     }
 }
 
+// MARK: - Conformances
+
+extension OpenAI.ChatMessage: AbstractLLM.ChatMessageConvertible {
+    public func __conversion() throws -> AbstractLLM.ChatMessage {
+        .init(
+            id: .init(rawValue: id),
+            role: try role.__conversion(),
+            content: try PromptLiteral(from: self)
+        )
+    }
+}
+
 extension OpenAI.ChatMessage: Codable {
     public enum CodingKeys: CodingKey {
+        case id
         case role
         case content
         case name
@@ -108,23 +125,25 @@ extension OpenAI.ChatMessage: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().stringValue // FIXME
         self.role = try container.decode(OpenAI.ChatRole.self, forKey: .role)
         
-        if role == .function {
-            self.body = .functionInvocation(
-                .init(
-                    name: try container.decode(String.self, forKey: .name),
-                    response: try container.decode(String.self, forKey: .name)
+        switch role {
+            case .function:
+                self.body = .functionInvocation(
+                    .init(
+                        name: try container.decode(String.self, forKey: .name),
+                        response: try container.decode(String.self, forKey: .name)
+                    )
                 )
-            )
-        } else if role == .assistant {
-            if let functionCall = try container.decodeIfPresent(OpenAI.ChatMessageBody.FunctionCall.self, forKey: .functionCall) {
-                self.body = .functionCall(functionCall)
-            } else {
+            case .assistant:
+                if let functionCall = try container.decodeIfPresent(OpenAI.ChatMessageBody.FunctionCall.self, forKey: .functionCall) {
+                    self.body = .functionCall(functionCall)
+                } else {
+                    self.body = try .content(container.decode(String.self, forKey: .content))
+                }
+            default:
                 self.body = try .content(container.decode(String.self, forKey: .content))
-            }
-        } else {
-            self.body = try .content(container.decode(String.self, forKey: .content))
         }
     }
     
@@ -152,16 +171,40 @@ extension OpenAI.ChatMessage: Codable {
     }
 }
 
+// MARK: - Initializers
+
 extension OpenAI.ChatMessage {
+    public init(
+        id: ID? = nil,
+        role: OpenAI.ChatRole,
+        body: String
+    ) {
+        self.init(
+            id: id,
+            role: role,
+            body: .content(body)
+        )
+    }
+    
+    public init(
+        role: OpenAI.ChatRole,
+        content: String
+    ) {
+        self.init(
+            role: role,
+            body: content
+        )
+    }
+
     public static func system(
         _ content: String
     ) -> Self {
-        Self(role: .system, body: .content(content))
+        Self(id: UUID().stringValue, role: .system, body: .content(content))
     }
     
     public static func user(
         _ content: String
     ) -> Self {
-        Self(role: .user, body: .content(content))
+        Self(id: UUID().stringValue, role: .user, body: .content(content))
     }
 }
