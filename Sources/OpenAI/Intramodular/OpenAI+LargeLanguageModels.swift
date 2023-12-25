@@ -35,8 +35,8 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
     
     private func _completion(
         for prompt: AbstractLLM.ChatPrompt
-    ) async throws -> AsyncThrowingStream<AbstractLLM.ChatCompletionStream.Event, Error> {
-        let stream = OpenAI.ChatCompletionSession(client: self)
+    ) async throws -> AnyPublisher<AbstractLLM.ChatCompletionStream.Event, Error> {
+        var session: OpenAI.ChatCompletionSession! = OpenAI.ChatCompletionSession(client: self)
         
         let messages: [OpenAI.ChatMessage] = try prompt.messages.map {
             try OpenAI.ChatMessage(from: $0)
@@ -48,13 +48,13 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
             completionHeuristics: nil
         )
         
-        return try await stream
+        return try await session
             .complete(
                 messages: messages,
                 model: model,
                 parameters: parameters
             )
-            .map { (message: OpenAI.ChatMessage) -> AbstractLLM.ChatCompletionStream.Event  in
+            .tryMap { (message: OpenAI.ChatMessage) -> AbstractLLM.ChatCompletionStream.Event in
                 AbstractLLM.ChatCompletionStream.Event.completion(
                     AbstractLLM.ChatCompletion.Partial(
                         message: .init(whole: try AbstractLLM.ChatMessage(from: message)),
@@ -62,7 +62,10 @@ extension OpenAI.APIClient: LargeLanguageModelServices {
                     )
                 )
             }
-            .eraseToThrowingStream()
+            .handleCancelOrCompletion { _ in
+                session = nil
+            }
+            .eraseToAnyPublisher()
     }
 
     public func complete<Prompt: AbstractLLM.Prompt>(

@@ -11,8 +11,9 @@ import Swallow
 
 extension OpenAI {
     public final class ChatCompletionSession: Logging {
-        private let taskQueue = TaskQueue()
+        private let queue = DispatchQueue()
         private let client: APIClient
+        
         private var eventSource: SSE.EventSource?
         
         public init(client: APIClient) {
@@ -31,7 +32,9 @@ extension OpenAI.ChatCompletionSession {
         }
     }
     
-    private func makeURLRequest(data: Data) throws -> URLRequest {
+    private func makeURLRequest(
+        data: Data
+    ) throws -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
         
         request.httpMethod = "POST"
@@ -48,7 +51,9 @@ extension OpenAI.ChatCompletionSession {
         messages: [OpenAI.ChatMessage],
         model: OpenAI.Model,
         parameters: OpenAI.APIClient.ChatCompletionParameters
-    ) async throws -> AsyncThrowingStream<OpenAI.ChatMessage, Error> {
+    ) async throws -> AnyPublisher<OpenAI.ChatMessage, Error> {
+        var _self: OpenAI.ChatCompletionSession! = self
+        
         let chatRequest = OpenAI.API.RequestBodies.CreateChatCompletion(
             messages: messages,
             model: model,
@@ -56,8 +61,8 @@ extension OpenAI.ChatCompletionSession {
             stream: true
         )
         
-        let data = try Self.encoder.encode(chatRequest)
-        let request = try makeURLRequest(data: data)
+        let data: Data = try Self.encoder.encode(chatRequest)
+        let request: URLRequest = try makeURLRequest(data: data)
         
         let responseMessage = _LockedState(
             initialState: OpenAI.ChatMessage(
@@ -67,44 +72,70 @@ extension OpenAI.ChatCompletionSession {
         )
         
         let eventSource = SSE.EventSource(request: request)
-        
+          
         self.eventSource = eventSource
-        
-        defer {
-            eventSource.connect()
-        }
-        
-        return eventSource.tryMap({ event -> OpenAI.ChatMessage? in
-            switch event {
-                case .open:
-                    return nil
-                case .message(let message):
-                    if let data = message.data?.data(using: .utf8) {
-                        let completion = try Self.decoder.decode(OpenAI.ChatCompletionChunk.self, from: data)
-                        let delta = try completion.choices.toCollectionOfOne().first.delta
-                        
-                        if let deltaContent = delta.content {
-                           try responseMessage.withLock {
-                                try $0.body += deltaContent
+                
+        return eventSource
+            .receive(on: queue)
+            .tryMap({ event -> ChatCompletionEvent? in
+                switch event {
+                    case .open:
+                        return nil
+                    case .message(let message):
+                        if let data: Data = message.data?.data(using: .utf8) {
+                            guard message.data != "[DONE]" else {
+                                _self.eventSource?.shutdown()
+                                
+                                return .stop
                             }
+                            
+                            let completion = try Self.decoder.decode(OpenAI.ChatCompletionChunk.self, from: data)
+                            let choice: OpenAI.ChatCompletionChunk.Choice = try completion.choices.toCollectionOfOne().first
+                            let delta = choice.delta
+                            
+                            if let deltaContent = delta.content {
+                                try responseMessage.withLock {
+                                    try $0.body += deltaContent
+                                }
+                            }
+                            
+                            return ChatCompletionEvent.message(responseMessage.withLock({ $0 }))
+                        } else {
+                            assertionFailure()
+                            
+                            return nil
                         }
+                    case .error(let error):
+                        runtimeIssue(error)
                         
-                        return responseMessage.withLock({ $0 })
-                    } else {
-                        assertionFailure()
+                        _self.eventSource = nil
                         
                         return nil
-                    }
-                case .error(let error):
-                    runtimeIssue(error)
-                    
-                    return nil
-                case .closed:
-                    return nil
+                    case .closed:
+                        _self.eventSource = nil
+                        _self = nil
+                        
+                        return nil
+                }
+            })
+            .compactMap({ (value: ChatCompletionEvent?) -> ChatCompletionEvent? in
+                value
+            })
+            .tryMap({ try $0.message.unwrap() })
+            .onSubscribe(perform: eventSource.connect)
+            .eraseToAnyPublisher()
+    }
+    
+    enum ChatCompletionEvent: Hashable {
+        case message(OpenAI.ChatMessage)
+        case stop
+        
+        var message: OpenAI.ChatMessage? {
+            guard case .message(let message) = self else {
+                return nil
             }
-        })
-        .compactMap({ $0 })
-        .values
-        .eraseToThrowingStream()
+            
+            return message
+        }
     }
 }
